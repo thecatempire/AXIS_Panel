@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: LicenseRef-AXIS-EULA
-# Copyright (c) 2025 Antonio Solano — All rights reserved.
+# Copyright (c) 2026 Antonio Solano — All rights reserved.
 # Project: AXIS Panel
 # Module: AXIS_Panel.py
-# Documentation: https://sites.google.com/view/a-solano/documentation
+# Documentation: https://axisproject.co/documentation
 
 
 __author__  = "Antonio Solano"
