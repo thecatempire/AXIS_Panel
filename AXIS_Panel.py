@@ -7,7 +7,7 @@
 
 __author__  = "Antonio Solano"
 __license__ = "LicenseRef-AXIS-EULA"
-PANEL_VERSION = (0, 6, 3)
+PANEL_VERSION = (0, 6, 2)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 
