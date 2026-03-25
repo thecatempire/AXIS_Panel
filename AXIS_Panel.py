@@ -7,7 +7,7 @@
 
 __author__  = "Antonio Solano"
 __license__ = "LicenseRef-AXIS-EULA"
-PANEL_VERSION = (0, 6, 2)
+PANEL_VERSION = (0, 6, 3)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 
@@ -1158,7 +1158,7 @@ def _panel_draw_info_block(layout, context):
         col.separator(factor=1.4)
 
         r = col.row(align=True)
-        r.operator("wm.url_open", text="Documentation", icon="HELP").url = "https://sites.google.com/view/a-solano/documentation"
+        r.operator("wm.url_open", text="Documentation", icon="HELP").url = "https://axisproject.co/documentation"
         col.separator(factor=0.6)
         r = col.row(align=True)
         r.operator("wm.url_open", text="Tutorials", icon="PLAY").url = "https://www.youtube.com/playlist?list=PLULNUwDQZpCZnWmO3qFrcNB0OkMJqjd4Y"
