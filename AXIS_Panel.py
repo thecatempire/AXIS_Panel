@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Antonio Solano — All rights reserved.
 # Project: AXIS Panel
 # Module: AXIS_Panel.py
-# Documentation: https://axisproject.co/documentation
+# Documentation: https://www.axisproject.co/documentation
 
 
 __author__  = "Antonio Solano"
