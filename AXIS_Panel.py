@@ -7,7 +7,7 @@
 
 __author__  = "Antonio Solano"
 __license__ = "LicenseRef-AXIS-EULA"
-PANEL_VERSION = (0, 6, 2)
+PANEL_VERSION = (0, 6, 3)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 
@@ -1168,7 +1168,7 @@ def _panel_draw_info_block(layout, context):
         r.operator("wm.url_open", text="Need more characters?", icon="ARMATURE_DATA").url = "https://superhivemarket.com/creators/thecatempire"
         col.separator(factor=0.6)
         r = col.row(align=True)
-        r.operator("wm.url_open", text="Support", icon="FUND").url = "mailto:thecatempirestudio@gmail.com"
+        r.operator("wm.url_open", text="Support", icon="FUND").url = "mailto:contact@axisproject.co"
 
 
 # -----------------------------
