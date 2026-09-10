@@ -7,7 +7,7 @@
 
 __author__  = "Antonio Solano"
 __license__ = "LicenseRef-AXIS-EULA"
-PANEL_VERSION = (0, 6, 4)
+PANEL_VERSION = (0, 6, 5)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 
@@ -1343,5 +1343,20 @@ def unregister():
     if hasattr(bpy.types.WindowManager, "axis_panel_ikfk_expanded"):
         del bpy.types.WindowManager.axis_panel_ikfk_expanded
 
+def _register_after_update():
+    # Skip if this copy got registered some other way in the meantime.
+    if getattr(bpy.types, "AXIS_PANEL_OT_download_update", None) is not AXISPANEL_OT_DownloadUpdate:
+        register()
+    return None  # run once
+
 if __name__ == "__main__":
-    register()
+    # When an installed panel's Update button runs this file, that button's
+    # operator is still executing. Registering right away replaces its class
+    # while it runs, and Blender crashes as soon as the updater touches `self`
+    # again -- every panel up to 0.6.4 does, to report the result. So if a
+    # panel is already registered, register on the next tick instead, once the
+    # updater has returned. Opening a file registers straight away as before.
+    if hasattr(bpy.types, "AXIS_PANEL_OT_download_update"):
+        bpy.app.timers.register(_register_after_update, first_interval=0.0, persistent=True)
+    else:
+        register()

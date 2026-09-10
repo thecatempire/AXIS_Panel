@@ -21,6 +21,9 @@ All AXIS-compatible characters are available at:
 
 ## Changelog
 
+### 0.6.5 — 2026-09-10
+- Fixed: pressing Update Panel could crash Blender. The new panel now registers once the update has finished.
+
 ### 0.6.4 — 2026-09-10
 - Security: the updater now verifies GitHub's certificate before downloading and installing a new panel.
 
