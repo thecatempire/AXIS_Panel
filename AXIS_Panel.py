@@ -14,9 +14,22 @@ PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 import bpy, threading, json, ssl
 from urllib import request as _urllib_request
 
-_ssl_ctx = ssl.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = ssl.CERT_NONE
+def _make_ssl_context():
+    """HTTPS context for the updater, with GitHub's certificate verified.
+
+    The update downloads this script and executes it, so verifying the
+    certificate is what guarantees the code really comes from this repository
+    and not from someone on the same network. Blender bundles certifi (checked
+    from 4.0 to 5.2), which also covers systems whose Python has no
+    certificate store of its own.
+    """
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+_ssl_ctx = _make_ssl_context()
 
 _VERSION_URL   = "https://raw.githubusercontent.com/thecatempire/AXIS_Panel/main/version.json"
 _PANEL_RAW_URL = "https://raw.githubusercontent.com/thecatempire/AXIS_Panel/main/AXIS_Panel.py"
