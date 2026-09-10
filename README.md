@@ -19,6 +19,20 @@ Open your AXIS character file in Blender, go to the **AXIS Panel** tab in the N-
 All AXIS-compatible characters are available at:
 [superhivemarket.com/creators/thecatempire](https://superhivemarket.com/creators/thecatempire)
 
+## Changelog
+
+### 0.6.4 — 2026-09-10
+- Security: the updater now verifies GitHub's certificate before downloading and installing a new panel.
+
+### 0.6.3 — 2026-04-06
+- The Support button now writes to contact@axisproject.co.
+
+### 0.6.2 — 2026-03-25
+- The Documentation button now opens axisproject.co/documentation.
+
+### 0.6.1 — 2026-03-25
+- First version published in this repository.
+
 ---
 
 © 2026 Antonio Solano — All rights reserved. See LICENSE for terms.
