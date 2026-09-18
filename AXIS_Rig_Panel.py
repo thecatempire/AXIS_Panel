@@ -1,28 +1,19 @@
-# SPDX-License-Identifier: LicenseRef-AXIS-EULA
-# Copyright (c) 2026 Antonio Solano — All rights reserved.
-# Project: AXIS Panel
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Antonio Solano (AXIS Project)
+# Project: AXIS Rig Panel
 # Module: AXIS_Rig_Panel.py
 # Documentation: https://www.axisproject.co/documentation
-"""AXIS Rig Panel V2: the animator's panel for VERSA V2 characters, in the "AXIS Rig" tab.
-
-One script per .blend, for every AXIS rig in it. Nothing in it belongs to one
-character: a rig is recognised by "axis_rig_version" on its armature, and the
-operators each rig's own UI script registers (Rigify's snapping, baking and
-parent switching) are called through the rig's rig_id.
-
-The face widget is part of the rig (its collections under "Face Widget", the
-board's Follow Head in "faceWidgetFollowHead"). Rigify's panels are gone: what they
-showed for each control is kept on the rig as data ("axis_ui") and drawn here under
-Selected Controls.
-
-It shares nothing with the first AXIS Panel (VERSA characters): other operator,
-class and property names, and its own files for updates, so both can be open in one
-session and neither updater ever installs the other.
-"""
+#
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later version.
+# It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+# License for more details: <https://www.gnu.org/licenses/>.
 
 __author__ = "Antonio Solano"
-__license__ = "LicenseRef-AXIS-EULA"
-PANEL_VERSION = (2, 0, 0)
+__license__ = "GPL-3.0-or-later"
+PANEL_VERSION = (2, 0, 1)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 import json
@@ -36,13 +27,6 @@ import mathutils
 
 
 def _make_ssl_context():
-    """HTTPS context for the updater, with GitHub's certificate verified.
-
-    The update downloads this script and executes it, so verifying the
-    certificate is what guarantees the code really comes from this repository.
-    Blender bundles certifi, which also covers systems whose Python has no
-    certificate store of its own.
-    """
     try:
         import certifi
         return ssl.create_default_context(cafile=certifi.where())
@@ -54,7 +38,7 @@ _ssl_ctx = _make_ssl_context()
 _VERSION_URL = "https://raw.githubusercontent.com/thecatempire/AXIS_Panel/main/version_rig_panel.json"
 _PANEL_RAW_URL = "https://raw.githubusercontent.com/thecatempire/AXIS_Panel/main/AXIS_Rig_Panel.py"
 TEXT_NAME = "AXIS_Rig_Panel.py"
-_update_state = {"status": "idle", "remote_version": None}  # idle | checking | available | up_to_date | error
+_update_state = {"status": "idle", "remote_version": None}
 
 CATEGORY = "AXIS Rig"
 TECHNICAL = {"Dev", "MCH", "DEF", "ORG"}
@@ -64,12 +48,7 @@ LEG_PARENTS = ("thigh_parent.L", "thigh_parent.R")
 FINGERS = ("thumb", "f_index", "f_middle", "f_ring", "f_pinky")
 
 
-# --------------------------------------------------------------------------
-# Rigs
-# --------------------------------------------------------------------------
-
 def rig_version(obj):
-    """The AXIS rig format of `obj`, or None when it is not an AXIS rig."""
     if not (obj and getattr(obj, "type", "") == 'ARMATURE'):
         return None
     version = obj.data.get("axis_rig_version")
@@ -91,7 +70,6 @@ def rig_id(rig):
 
 
 def rigify_operator(rig, name):
-    """The rig's own Rigify operator `name` (e.g. "rigify_generic_snap"), or None if not registered."""
     rid = rig_id(rig)
     if not rid:
         return None
@@ -124,19 +102,9 @@ def has_bone(rig, name):
 
 
 def is_selected(pose_bone):
-    """Blender 5 keeps the selection on the pose bone; 4.x on the bone."""
     selected = getattr(pose_bone, "select", None)
     return pose_bone.bone.select if selected is None else selected
 
-
-# --------------------------------------------------------------------------
-# Blender 4.5 and 5
-# --------------------------------------------------------------------------
-#
-# Characters are made in Blender 5 and open from 4.5 on. Blender 5 hides a bone in Pose
-# mode with PoseBone.hide; 4.x with Bone.hide (which in 5 only acts in Edit mode). Rigify
-# drives the IK targets' and poles' visibility with one or the other, so when the file is
-# opened, those drivers are moved to the property this Blender uses.
 
 _POSE_HIDE = re.compile(r'^pose\.bones\["(.+)"\]\.hide$')
 _BONE_HIDE = re.compile(r'^bones\["(.+)"\]\.hide$')
@@ -164,7 +132,6 @@ def _copy_driver(source, holder, path):
 
 
 def adapt_visibility_drivers():
-    """Move the rigs' bone visibility drivers to the property this Blender hides bones with."""
     pose_hide = bpy.types.PoseBone.bl_rna.properties.get("hide") is not None
     moved = 0
     for rig in [obj for obj in bpy.data.objects if is_axis_rig(obj)]:
@@ -208,12 +175,6 @@ def refresh(context, rig=None):
 
 
 class pose_mode_on:
-    """Pose mode on `rig` for the duration, with the previous active object and mode put back.
-
-    Rigify's operators act on the active object in Pose mode. The rig is named in a
-    context override so this also works when it is hidden or not the active object.
-    """
-
     def __init__(self, context, rig):
         self.context, self.rig = context, rig
 
@@ -241,29 +202,33 @@ class pose_mode_on:
                 self._mode_set(self.previous, self.previous_mode)
 
 
-# --------------------------------------------------------------------------
-# Face widget
-# --------------------------------------------------------------------------
+def all_collections(armature):
+    found = getattr(armature, "collections_all", None)
+    return found if found is not None else armature.collections
+
+
+def children_of(collection, armature):
+    children = getattr(collection, "children", None)
+    if children is not None:
+        return list(children)
+    if collection.name != FACE_WIDGET:
+        return []
+    return [c for c in all_collections(armature) if c != collection and len(c.bones)
+            and all(bone.name.startswith("wg_") for bone in c.bones)]
+
 
 def widget_collections(rig):
-    """(the Face Widget parent collection, its board collections, whether Follow Head exists)."""
-    parent = rig.data.collections_all.get(FACE_WIDGET)
-    return parent, (list(parent.children) if parent else []), "faceWidgetFollowHead" in rig.data.keys()
+    parent = all_collections(rig.data).get(FACE_WIDGET)
+    return parent, (children_of(parent, rig.data) if parent else []), "faceWidgetFollowHead" in rig.data.keys()
 
-
-# --------------------------------------------------------------------------
-# Mirroring
-# --------------------------------------------------------------------------
 
 _DOTTED = re.compile(r"^(.*)\.([LR])((?:\.\d+)?)$")
 _UNDERSCORE = re.compile(r"^(.*)_([LR])((?:\.\d+)?)$")
-# AXIS names put the side after the part: eyelidUpperL, upperArmTwist1LCtrl, wg_browDownL.
 _CAMEL = re.compile(r"^(.*[a-z0-9\-])([LR])((?:Ctrl\d*|Aim|Ctrl\.\d+)?)$")
 _WORD = re.compile(r"^(.*)(Left|Right)(.*)$")
 
 
 def mirror_name(name):
-    """The name of the bone on the other side, or None for a centre bone."""
     for pattern in (_DOTTED, _UNDERSCORE, _CAMEL):
         match = pattern.match(name)
         if match:
@@ -321,10 +286,6 @@ def _snapshot(pose_bone):
             pose_bone.rotation_euler.copy(), tuple(pose_bone.rotation_axis_angle), pose_bone.scale.copy())
 
 
-# --------------------------------------------------------------------------
-# Properties
-# --------------------------------------------------------------------------
-
 class AXISRIGPANEL_Props(bpy.types.PropertyGroup):
     expand_widget: bpy.props.BoolProperty(name="Face Widget", default=True)
     expand_rig: bpy.props.BoolProperty(name="Rig Layers", default=False)
@@ -334,10 +295,6 @@ class AXISRIGPANEL_Props(bpy.types.PropertyGroup):
     expand_performance: bpy.props.BoolProperty(name="Performance", default=False)
     expand_info: bpy.props.BoolProperty(name="Info", default=False)
 
-
-# --------------------------------------------------------------------------
-# Operators
-# --------------------------------------------------------------------------
 
 class AXISRIGPANEL_OT_ToggleSimplify(bpy.types.Operator):
     bl_idname = "axis_rig_panel.toggle_simplify"
@@ -374,7 +331,7 @@ class AXISRIGPANEL_OT_fingers(bpy.types.Operator):
     bl_description = "Set every finger of the hand to IK or FK"
     bl_options = {'REGISTER', 'UNDO'}
 
-    side: bpy.props.StringProperty(default="L", options={'HIDDEN'})  # L, R or BOTH
+    side: bpy.props.StringProperty(default="L", options={'HIDDEN'})
     value: bpy.props.FloatProperty(default=1.0, options={'HIDDEN'})
 
     def execute(self, context):
@@ -438,7 +395,7 @@ class AXISRIGPANEL_OT_snap(bpy.types.Operator):
     bl_description = "Match one chain to the other without moving the limb: FK to IK, or IK to FK"
     bl_options = {'REGISTER', 'UNDO'}
 
-    part: bpy.props.StringProperty(options={'HIDDEN'})       # arm, leg, fingers, all
+    part: bpy.props.StringProperty(options={'HIDDEN'})
     side: bpy.props.StringProperty(default="L", options={'HIDDEN'})
     direction: bpy.props.StringProperty(default="FK2IK", options={'HIDDEN'})
 
@@ -466,8 +423,6 @@ class AXISRIGPANEL_OT_reset_pose(bpy.types.Operator):
     bl_description = "Put every bone of the rig back to its rest transform"
     bl_options = {'REGISTER', 'UNDO'}
 
-    # SKIP_SAVE: an operator remembers its last settings, so Reset Pose would otherwise
-    # reset only the selection after the Selected button had been used once.
     selected_only: bpy.props.BoolProperty(name="Selected Only", default=False, options={'SKIP_SAVE'})
 
     def execute(self, context):
@@ -569,7 +524,7 @@ class AXISRIGPANEL_OT_side_mirror(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     src: bpy.props.StringProperty(default="L", options={'HIDDEN'})
-    mode: bpy.props.StringProperty(default="MIRROR", options={'HIDDEN'})  # MIRROR or FLIP
+    mode: bpy.props.StringProperty(default="MIRROR", options={'HIDDEN'})
 
     def execute(self, context):
         rig = main_rig(context)
@@ -593,20 +548,10 @@ class AXISRIGPANEL_OT_side_mirror(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# --------------------------------------------------------------------------
-# Drawing
-# --------------------------------------------------------------------------
-#
-# The look follows the AXIS Dev add-on: a section header is a full-width button that
-# turns blue while the section is open. Buttons are laid out apart (align=False), so
-# Blender draws each with its own rounded corners and a gap around it; how round those
-# corners are is the theme's setting, not the panel's.
-
 PROPS_PATH = "scene.axis_rig_panel_props"
 
 
 def _header(layout, props, attr, title):
-    """A collapsible section: a full-width button, blue while open. Returns (box, open)."""
     box = layout.box()
     is_open = getattr(props, attr)
     row = box.row()
@@ -619,7 +564,6 @@ def _header(layout, props, attr, title):
 
 
 def _group(layout, title, icon='NONE'):
-    """A titled group inside a section."""
     box = layout.box()
     box.label(text=title, icon=icon)
     return box
@@ -671,14 +615,14 @@ def draw_layers(layout, context, props, rig):
     box, is_open = _header(layout, props, "expand_rig", "Rig Layers")
     if not is_open:
         return
-    everything = rig.data.collections_all
+    everything = all_collections(rig.data)
     widget_parent = everything.get(FACE_WIDGET)
     board = set()
     stack = [widget_parent] if widget_parent else []
-    while stack:  # BoneCollection has no children_recursive
+    while stack:
         collection = stack.pop()
         board.add(collection)
-        stack.extend(collection.children)
+        stack.extend(children_of(collection, rig.data))
     usable = {c.name: c for c in everything if c not in board and not any(t in c.name for t in TECHNICAL)}
     get = usable.get
 
@@ -710,12 +654,11 @@ def draw_layers(layout, context, props, rig):
             _row(group).prop(get("Root"), "is_visible", text="Root", toggle=True)
 
     known = {"Basic Face", "Face Deform", "Gaze", "Tongue", "Fingers", "Fingers Detail", "Torso", "Torso Tweak", "Root"}
-    others = [c for n, c in usable.items() if n not in known and not n.startswith(("Arm.", "Leg.")) and not c.children]
+    others = [c for n, c in usable.items() if n not in known and not n.startswith(("Arm.", "Leg.")) and not children_of(c, rig.data)]
     if others:
         _pairs(_group(box, "Other", 'GROUP_BONE'), others)
 
 
-# Friendlier names for Rigify's own labels.
 _LABELS = (
     (re.compile(r"^IK-FK \((.+)\)$"), r"IK / FK"),
     (re.compile(r"^FK->IK \((.+)\)$"), r"FK → IK"),
@@ -758,14 +701,13 @@ def _draw_spec_items(layout, rig, items):
             named = [json.loads(v) if isinstance(v, str) and v.startswith("[") else [v]
                      for k, v in params.items() if k.endswith(("bones", "bone", "chain", "master", "control"))]
             if any(isinstance(n, str) and n and n != "None" and n not in bones for group in named for n in group):
-                continue  # a bone the stripped rig does not have
+                continue
             idname = f"{item['op']}_{rid}"
             module, _, name = idname.partition(".")
             if getattr(getattr(bpy.ops, module), name, None) is None:
                 continue
             try:
                 if item["text"] is None:
-                    # No text given: Blender shows the operator's own name, as Rigify's panel did.
                     op = layout.operator(idname, icon=item["icon"] or 'NONE')
                 else:
                     op = layout.operator(idname, text=_label(item["text"]), icon=item["icon"] or 'NONE')
@@ -801,7 +743,6 @@ def draw_selected(layout, context, props, rig):
 
 
 def _sides(layout):
-    """Two columns, Left and Right, each under its title."""
     row = layout.row(align=False)
     left, right = _column(row), _column(row)
     left.label(text="Left")
@@ -978,7 +919,6 @@ class AXISRIGPANEL_PT_main(bpy.types.Panel):
         if rig is None:
             box = layout.box()
             box.label(text="Choose an AXIS rig", icon='ERROR')
-            # Drawing cannot write to the scene: offer the rigs found as buttons instead.
             for obj in [obj for obj in context.view_layer.objects if is_axis_rig(obj)][:4]:
                 _row(box).operator("axis_rig_panel.pick_rig", text=f"Use {obj.name}", icon='ARMATURE_DATA').name = obj.name
             draw_performance(layout, context, props)
@@ -989,8 +929,6 @@ class AXISRIGPANEL_PT_main(bpy.types.Panel):
         draw_layers(layout, context, props, rig)
         draw_ikfk(layout, context, props, rig)
         draw_pose_tools(layout, context, props, rig)
-        # Selected Controls and IK / FK draw the same bone properties, so a change in one
-        # shows in the other at once: there is no copy of the values in between.
         draw_selected(layout, context, props, rig)
         draw_performance(layout, context, props)
         draw_info(layout, context, props)
@@ -1011,10 +949,6 @@ class AXISRIGPANEL_OT_pick_rig(bpy.types.Operator):
         context.scene.axis_rig_panel_rig = obj
         return {'FINISHED'}
 
-
-# --------------------------------------------------------------------------
-# Updates
-# --------------------------------------------------------------------------
 
 class AXISRIGPANEL_OT_CheckUpdate(bpy.types.Operator):
     bl_idname = "axis_rig_panel.check_update"
@@ -1078,10 +1012,6 @@ class AXISRIGPANEL_OT_DownloadUpdate(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# --------------------------------------------------------------------------
-# Registration
-# --------------------------------------------------------------------------
-
 classes = [
     AXISRIGPANEL_Props,
     AXISRIGPANEL_PT_main,
@@ -1102,7 +1032,6 @@ classes = [
 
 
 def _registered(cls):
-    """The class registered under `cls`'s name, if any (an earlier copy of this panel)."""
     if issubclass(cls, bpy.types.Panel):
         return getattr(bpy.types, cls.bl_idname, None)
     if issubclass(cls, bpy.types.Operator):
@@ -1130,7 +1059,7 @@ def register():
     try:
         adapt_visibility_drivers()
     except AttributeError:
-        pass  # data not reachable while registering: the load handler does it
+        pass
 
 
 def unregister():
@@ -1153,9 +1082,6 @@ def _register_after_update():
 
 
 if __name__ == "__main__":
-    # When the Update button runs this file, that button's operator is still executing:
-    # registering right away replaces its class while it runs and crashes Blender. So if
-    # a panel is already registered, register on the next tick instead.
     if hasattr(bpy.types, "AXIS_RIG_PANEL_OT_download_update"):
         bpy.app.timers.register(_register_after_update, first_interval=0.0, persistent=True)
     else:

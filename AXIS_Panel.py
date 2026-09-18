@@ -1,12 +1,19 @@
-# SPDX-License-Identifier: LicenseRef-AXIS-EULA
-# Copyright (c) 2026 Antonio Solano — All rights reserved.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Antonio Solano (AXIS Project)
 # Project: AXIS Panel
 # Module: AXIS_Panel.py
 # Documentation: https://www.axisproject.co/documentation
+#
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later version.
+# It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+# License for more details: <https://www.gnu.org/licenses/>.
 
 
 __author__  = "Antonio Solano"
-__license__ = "LicenseRef-AXIS-EULA"
+__license__ = "GPL-3.0-or-later"
 PANEL_VERSION = (0, 6, 5)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
