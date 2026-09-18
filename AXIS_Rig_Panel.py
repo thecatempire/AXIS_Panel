@@ -13,7 +13,7 @@
 
 __author__ = "Antonio Solano"
 __license__ = "GPL-3.0-or-later"
-PANEL_VERSION = (2, 0, 1)
+PANEL_VERSION = (2, 0, 2)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 import json
@@ -79,6 +79,34 @@ def rigify_operator(rig, name):
     except (AttributeError, KeyError):
         return None
     return op
+
+
+_spec_cache = {}
+
+
+def control_spec(rig):
+    source = rig.data.get("axis_ui") if rig else None
+    if not source:
+        return None
+    key = rig.data.as_pointer()
+    cached = _spec_cache.get(key)
+    if cached is None or cached[0] != source:
+        cached = (source, json.loads(source))
+        _spec_cache[key] = cached
+    return cached[1]
+
+
+def rigify_button(rig, op, text):
+    spec = control_spec(rig)
+    if spec is None:
+        return None
+    stack = [item for group in spec["groups"] for item in group["items"]]
+    while stack:
+        item = stack.pop()
+        if item["kind"] == "operator" and item["op"] == op and item.get("text") == text:
+            return {key: tuple(value) if isinstance(value, list) else value for key, value in item["params"].items()}
+        stack.extend(item.get("items", []))
+    return None
 
 
 def bone_prop(rig, bone, prop, default=0.0):
@@ -184,6 +212,7 @@ class pose_mode_on:
 
     def __enter__(self):
         view_layer = self.context.view_layer
+        self.rig_mode = self.rig.mode
         self.previous = view_layer.objects.active
         self.previous_mode = self.previous.mode if self.previous else 'OBJECT'
         if self.previous is not None and self.previous != self.rig and self.previous.mode != 'OBJECT':
@@ -200,6 +229,8 @@ class pose_mode_on:
             self.context.view_layer.objects.active = self.previous
             if self.previous_mode != 'OBJECT':
                 self._mode_set(self.previous, self.previous_mode)
+        elif self.rig.mode != self.rig_mode:
+            self._mode_set(self.rig, self.rig_mode)
 
 
 def all_collections(armature):
@@ -254,17 +285,31 @@ def side_of(name):
     return "L" if "Left" in name else "R"
 
 
-def _mirrored_transform(location, mode, quaternion, euler, axis_angle, scale):
-    location = location.copy()
-    location.x = -location.x
+_MIRROR_X = mathutils.Matrix.Diagonal((-1.0, 1.0, 1.0))
+
+
+def mirror_basis(rig, name, other):
+    source = rig.data.bones[name].matrix_local.to_3x3()
+    target = rig.data.bones[other].matrix_local.to_3x3()
+    return target.inverted() @ _MIRROR_X @ source
+
+
+def _mirrored_transform(basis, location, mode, quaternion, euler, axis_angle, scale):
+    location = basis @ location
     if mode == 'QUATERNION':
-        rotation = mathutils.Quaternion((quaternion.w, quaternion.x, -quaternion.y, -quaternion.z))
+        matrix = quaternion.to_matrix()
     elif mode == 'AXIS_ANGLE':
-        rotation = (axis_angle[0], axis_angle[1], -axis_angle[2], -axis_angle[3])
+        matrix = mathutils.Quaternion(axis_angle[1:], axis_angle[0]).to_matrix()
     else:
-        rotation = euler.copy()
-        rotation.y = -rotation.y
-        rotation.z = -rotation.z
+        matrix = euler.to_matrix()
+    matrix = basis @ matrix @ basis.inverted()
+    if mode == 'QUATERNION':
+        rotation = matrix.to_quaternion()
+    elif mode == 'AXIS_ANGLE':
+        axis, angle = matrix.to_quaternion().to_axis_angle()
+        rotation = (angle, axis.x, axis.y, axis.z)
+    else:
+        rotation = matrix.to_euler(mode, euler)
     return location, mode, rotation, scale.copy()
 
 
@@ -310,7 +355,7 @@ class AXISRIGPANEL_OT_ToggleSimplify(bpy.types.Operator):
 class AXISRIGPANEL_OT_limbs_ikfk(bpy.types.Operator):
     bl_idname = "axis_rig_panel.toggle_ikfk_limbs_global"
     bl_label = "All Limbs IK / FK"
-    bl_description = "Switch every arm and leg to IK, or to FK when they already are"
+    bl_description = "Switch every arm and leg to FK, or back to IK when they all are"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -361,6 +406,13 @@ def snap_limb(rig, limb, side, direction):
     fk, ik, ctrl, prop_bone = _limb_bones(limb, side)
     if not has_bone(rig, prop_bone):
         return False
+    end = "hand" if limb == "arm" else "foot"
+    op = "rigify_generic_snap" if direction == "FK2IK" else "rigify_limb_ik2fk"
+    label = "FK->IK" if direction == "FK2IK" else "IK->FK"
+    params = rigify_button(rig, f"pose.{op}", f"{label} ({end}.{side})")
+    if params is not None:
+        rigify_operator(rig, op)(**params)
+        return True
     if direction == "FK2IK":
         rigify_operator(rig, "rigify_generic_snap")(
             output_bones=json.dumps(fk), input_bones=json.dumps(ik), ctrl_bones=json.dumps(ctrl))
@@ -378,6 +430,12 @@ def snap_fingers(rig, side, direction):
             continue
         fk_master = f"{finger}.01_master.{side}"
         fk_chain = [f"{finger}.01.{side}", f"{finger}.02.{side}", f"{finger}.03.{side}", f"{finger}.01.{side}.001"]
+        op = "rigify_finger_fk2ik" if direction == "FK2IK" else "rigify_generic_snap"
+        label = "FK->IK" if direction == "FK2IK" else "IK->FK"
+        params = rigify_button(rig, f"pose.{op}", f"{label} ({finger}.01.{side})")
+        if params is not None:
+            rigify_operator(rig, op)(**params)
+            continue
         if direction == "FK2IK":
             rigify_operator(rig, "rigify_finger_fk2ik")(
                 fk_master=fk_master, fk_chain=json.dumps(fk_chain),
@@ -537,11 +595,8 @@ class AXISRIGPANEL_OT_side_mirror(bpy.types.Operator):
             other = mirror_name(name)
             if other is None or other not in bones:
                 continue
-            if self.mode == "FLIP":
-                _apply_transform(bones[other], _mirrored_transform(*data))
-                done += 1
-            elif side_of(name) == self.src:
-                _apply_transform(bones[other], _mirrored_transform(*data))
+            if self.mode == "FLIP" or side_of(name) == self.src:
+                _apply_transform(bones[other], _mirrored_transform(mirror_basis(rig, name, other), *data))
                 done += 1
         refresh(context, rig)
         self.report({'INFO'}, f"{done} bones {'flipped' if self.mode == 'FLIP' else 'mirrored'}")
@@ -727,14 +782,14 @@ def draw_selected(layout, context, props, rig):
     if context.mode != 'POSE' or context.active_object is not rig:
         box.label(text="Select controls in Pose mode", icon='INFO')
         return
-    spec_source = rig.data.get("axis_ui")
-    if not spec_source:
+    spec = control_spec(rig)
+    if not spec:
         box.label(text="This rig has no control data", icon='ERROR')
         return
     selected = {pb.name for pb in (context.selected_pose_bones or [])}
     if context.active_pose_bone:
         selected.add(context.active_pose_bone.name)
-    groups = [g for g in json.loads(spec_source)["groups"] if selected.intersection(g["bones"])]
+    groups = [g for g in spec["groups"] if selected.intersection(g["bones"])]
     if not groups:
         box.label(text="No properties for the selection", icon='INFO')
         return

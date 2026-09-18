@@ -28,6 +28,12 @@ All AXIS-compatible characters are available at:
 
 ## Changelog — AXIS Rig Panel
 
+### 2.0.2 — 2026-09-18
+- Fixed: leg IK/FK snaps now carry the toe, heel and foot spin controls, exactly as Rigify's own buttons.
+- Fixed: Mirror and Flip now mirror every left/right pair correctly, including face controls whose axes are not symmetric.
+- The rig stays in its mode after a snap.
+- All Limbs: corrected tooltip.
+
 ### 2.0.1 — 2026-09-18
 - Works from Blender 4.0: bone selection, IK control visibility and the Face Widget layers on Blender 4.x.
 - Fixed: Fingers FK → IK.
