@@ -660,7 +660,9 @@ def draw_widget(layout, context, props, rig):
     row.prop(parent, "is_visible", text="Show Face Widget", toggle=True, icon='HIDE_OFF' if parent.is_visible else 'HIDE_ON')
     group = _group(box, "Layers", 'SHAPEKEY_DATA')
     group.enabled = parent.is_visible
-    _pairs(group, collections)
+    if collections:
+        _toggle(_row(group), collections[0])
+        _pairs(group, collections[1:])
     if follow:
         _row(group).prop(rig.data, '["faceWidgetFollowHead"]', text="Widget Follow Head", slider=True)
 
