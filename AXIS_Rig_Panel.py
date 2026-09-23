@@ -699,12 +699,13 @@ def draw_layers(layout, context, props, rig):
             row = _row(group)
             _toggle(row, lefts[index] if index < len(lefts) else None)
             _toggle(row, rights[index] if index < len(rights) else None)
-        if title == "Legs" and get("Toes"):
-            _toggle(_row(group), get("Toes"))
 
     fingers = [c for c in (get("Fingers"), get("Fingers IK"), get("Fingers Detail")) if c]
-    if fingers:
-        _pairs(_group(box, "Fingers", 'VIEW_PAN'), fingers)
+    if fingers or get("Toes"):
+        group = _group(box, "Fingers", 'VIEW_PAN')
+        _pairs(group, fingers)
+        if get("Toes"):
+            _toggle(_row(group), get("Toes"))
 
     if get("Torso") or get("Torso Tweak") or get("Root"):
         group = _group(box, "Body", 'OUTLINER_OB_ARMATURE')
