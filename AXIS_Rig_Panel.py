@@ -13,7 +13,7 @@
 
 __author__ = "Antonio Solano"
 __license__ = "GPL-3.0-or-later"
-PANEL_VERSION = (2, 0, 2)
+PANEL_VERSION = (2, 0, 0)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 import json
@@ -698,9 +698,12 @@ def draw_layers(layout, context, props, rig):
             row = _row(group)
             _toggle(row, lefts[index] if index < len(lefts) else None)
             _toggle(row, rights[index] if index < len(rights) else None)
+        if title == "Legs" and get("Toes"):
+            _toggle(_row(group), get("Toes"))
 
-    if get("Fingers") or get("Fingers Detail"):
-        _pairs(_group(box, "Fingers", 'HAND'), [get("Fingers"), get("Fingers Detail")])
+    if get("Fingers") or get("Fingers IK") or get("Fingers Detail"):
+        _pairs(_group(box, "Fingers", 'HAND'),
+               [get("Fingers"), get("Fingers IK"), get("Fingers Detail")])
 
     if get("Torso") or get("Torso Tweak") or get("Root"):
         group = _group(box, "Body", 'MOD_ARMATURE')
@@ -708,7 +711,8 @@ def draw_layers(layout, context, props, rig):
         if get("Root"):
             _row(group).prop(get("Root"), "is_visible", text="Root", toggle=True)
 
-    known = {"Basic Face", "Face Deform", "Gaze", "Tongue", "Fingers", "Fingers Detail", "Torso", "Torso Tweak", "Root"}
+    known = {"Basic Face", "Face Deform", "Gaze", "Tongue", "Fingers", "Fingers IK", "Fingers Detail",
+             "Toes", "Torso", "Torso Tweak", "Root"}
     others = [c for n, c in usable.items() if n not in known and not n.startswith(("Arm.", "Leg.")) and not children_of(c, rig.data)]
     if others:
         _pairs(_group(box, "Other", 'GROUP_BONE'), others)
