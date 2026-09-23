@@ -689,7 +689,7 @@ def draw_layers(layout, context, props, rig):
         if "gazeFollowHead" in rig.data.keys():
             _row(group).prop(rig.data, '["gazeFollowHead"]', text="Gaze Follow Head", slider=True)
 
-    for title, icon, left, right in (("Arms", 'VIEW_PAN', "Arm.L", "Arm.R"), ("Legs", 'BONE_DATA', "Leg.L", "Leg.R")):
+    for title, icon, left, right in (("Arms", 'ARMATURE_DATA', "Arm.L", "Arm.R"), ("Legs", 'BONE_DATA', "Leg.L", "Leg.R")):
         lefts = [c for n, c in usable.items() if n.startswith(left)]
         rights = [c for n, c in usable.items() if n.startswith(right)]
         if not (lefts or rights):
@@ -704,10 +704,10 @@ def draw_layers(layout, context, props, rig):
 
     fingers = [c for c in (get("Fingers"), get("Fingers IK"), get("Fingers Detail")) if c]
     if fingers:
-        _pairs(_group(box, "Fingers", 'HAND'), fingers)
+        _pairs(_group(box, "Fingers", 'VIEW_PAN'), fingers)
 
     if get("Torso") or get("Torso Tweak") or get("Root"):
-        group = _group(box, "Body", 'MOD_ARMATURE')
+        group = _group(box, "Body", 'OUTLINER_OB_ARMATURE')
         _pairs(group, [get("Torso"), get("Torso Tweak")])
         if get("Root"):
             _row(group).prop(get("Root"), "is_visible", text="Root", toggle=True)
