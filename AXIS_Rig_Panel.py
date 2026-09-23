@@ -662,8 +662,7 @@ def draw_widget(layout, context, props, rig):
     group.enabled = parent.is_visible
     _pairs(group, collections)
     if follow:
-        group = _group(box, "Options", 'CONSTRAINT_BONE')
-        _row(group).prop(rig.data, '["faceWidgetFollowHead"]', text="Follow Head", slider=True)
+        _row(group).prop(rig.data, '["faceWidgetFollowHead"]', text="Widget Follow Head", slider=True)
 
 
 def draw_layers(layout, context, props, rig):
@@ -701,9 +700,9 @@ def draw_layers(layout, context, props, rig):
         if title == "Legs" and get("Toes"):
             _toggle(_row(group), get("Toes"))
 
-    if get("Fingers") or get("Fingers IK") or get("Fingers Detail"):
-        _pairs(_group(box, "Fingers", 'HAND'),
-               [get("Fingers"), get("Fingers IK"), get("Fingers Detail")])
+    fingers = [c for c in (get("Fingers"), get("Fingers IK"), get("Fingers Detail")) if c]
+    if fingers:
+        _pairs(_group(box, "Fingers", 'HAND'), fingers)
 
     if get("Torso") or get("Torso Tweak") or get("Root"):
         group = _group(box, "Body", 'MOD_ARMATURE')
