@@ -14,11 +14,13 @@
 
 __author__  = "Antonio Solano"
 __license__ = "GPL-3.0-or-later"
-PANEL_VERSION = (0, 6, 5)
+PANEL_VERSION = (0, 6, 6)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
 
-import bpy, threading, json, ssl
+import bpy, threading, json, ssl, re
+import mathutils, mathutils.kdtree
+import numpy as np
 from urllib import request as _urllib_request
 
 def _make_ssl_context():
@@ -732,6 +734,243 @@ class AXIS_OT_panel_side_mirror(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# ------------------------------------------------------------
+# Rig Repair (0.6.6)
+# ------------------------------------------------------------
+# Detects and repairs two known issues in the corrective shapekeys of
+# AXIS characters (OMNIA 2 / VERSA). Nothing is shown when they are absent.
+#
+#  1) Drivers of "...Left" / "...Right" shapekeys reading a bone of the
+#     other side (thumbTwistLeft / thumbTipLeft read DEF-thumb.0x.R).
+#  2) upperArmTwistInRight / upperArmTwistOutRight: names swapped with
+#     respect to the left side (geometry and driver are correct together,
+#     only the name is the opposite).
+#
+# Detection is read-only and cached per file; the repair is undoable.
+
+_REPAIR_SIDE_RE = re.compile(r"\.(L|R)((?:\.\d+)?)$")
+_REPAIR_PATH_RE = re.compile(r'key_blocks\["(.+)"\]\.value')
+_REPAIR_SWAPS = (
+    # (left reference, right_a, right_b): swap right names if left mirrors right_b
+    ("upperArmTwistInLeft", "upperArmTwistInRight", "upperArmTwistOutRight"),
+)
+_REPAIR_EPS = 1e-5
+_repair_cache = {}   # rig name -> list of issues
+
+
+def _repair_meshes(rig):
+    """Meshes with shapekeys deformed by this rig."""
+    out = []
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH' or not obj.data.shape_keys:
+            continue
+        if any(m.type == 'ARMATURE' and m.object is rig for m in obj.modifiers):
+            out.append(obj)
+    return out
+
+
+def _repair_expected_side(name):
+    if name.endswith("Left"):
+        return "L"
+    if name.endswith("Right"):
+        return "R"
+    return None
+
+
+def _repair_coords(block):
+    n = len(block.data)
+    arr = np.empty(n * 3, dtype=np.float32)
+    block.data.foreach_get("co", arr)
+    return arr.reshape(n, 3)
+
+
+def _repair_mirror_map(basis):
+    kd = mathutils.kdtree.KDTree(len(basis))
+    for i, co in enumerate(basis):
+        kd.insert(co, i)
+    kd.balance()
+    return np.array([kd.find((-co[0], co[1], co[2]))[1] for co in basis], dtype=np.int64)
+
+
+def _repair_mirror_error(kb, basis, mirror, a, b):
+    """0 = shape b is the exact X-mirror of shape a."""
+    da = _repair_coords(kb[a]) - basis
+    db = _repair_coords(kb[b]) - basis
+    norm = np.linalg.norm(da, axis=1)
+    mask = norm > _REPAIR_EPS
+    total = norm[mask].sum()
+    if not total:
+        return None
+    flipped = da[mask] * np.array((-1.0, 1.0, 1.0), dtype=np.float32)
+    return float(np.linalg.norm(flipped - db[mirror[mask]], axis=1).sum() / total)
+
+
+def _repair_scan_mesh(obj):
+    issues = []
+    key = obj.data.shape_keys
+    kb = key.key_blocks
+
+    # 1) bones from the wrong side
+    if key.animation_data:
+        for fc in key.animation_data.drivers:
+            m = _REPAIR_PATH_RE.match(fc.data_path)
+            side = _repair_expected_side(m.group(1)) if m else None
+            if side is None:
+                continue
+            for var in fc.driver.variables:
+                for t in var.targets:
+                    bone = t.bone_target
+                    if not bone or t.id is None or getattr(t.id, "type", "") != 'ARMATURE':
+                        continue
+                    sm = _REPAIR_SIDE_RE.search(bone)
+                    if not sm or sm.group(1) == side:
+                        continue
+                    new_bone = bone[:sm.start()] + "." + side + sm.group(2)
+                    if new_bone in t.id.data.bones:
+                        issues.append({"kind": "bone", "mesh": obj.name, "key": m.group(1),
+                                       "var": var.name, "old": bone, "new": new_bone})
+
+    # 2) swapped names (geometry check, only if the shapekeys exist)
+    swaps = [s for s in _REPAIR_SWAPS if all(n in kb for n in s)]
+    if swaps:
+        basis = _repair_coords(key.reference_key)
+        mirror = _repair_mirror_map(basis)
+        for left, ra, rb in swaps:
+            straight = _repair_mirror_error(kb, basis, mirror, left, ra)
+            crossed = _repair_mirror_error(kb, basis, mirror, left, rb)
+            if straight is not None and crossed is not None and crossed < straight * 0.5:
+                issues.append({"kind": "swap", "mesh": obj.name, "a": ra, "b": rb})
+    return issues
+
+
+def _repair_scan(rig):
+    if rig is None:
+        return []
+    cached = _repair_cache.get(rig.name)
+    if cached is None:
+        cached = []
+        for obj in _repair_meshes(rig):
+            try:
+                cached += _repair_scan_mesh(obj)
+            except Exception as e:
+                print(f"[AXIS Panel] Rig check skipped on {obj.name}: {e}")
+        _repair_cache[rig.name] = cached
+    return cached
+
+
+def _repair_describe(issue):
+    if issue["kind"] == "bone":
+        return f"{issue['key']}: reads {issue['old']} instead of {issue['new']}"
+    return f"{issue['a']} / {issue['b']}: names swapped"
+
+
+@bpy.app.handlers.persistent
+def _repair_on_load(*_args):
+    _repair_cache.clear()
+
+
+_REPAIR_HANDLERS = ("load_post", "undo_post", "redo_post")
+
+
+def _repair_handlers_set(enable):
+    for name in _REPAIR_HANDLERS:
+        lst = getattr(bpy.app.handlers, name)
+        for h in list(lst):
+            if getattr(h, "__name__", "") == "_repair_on_load":
+                lst.remove(h)  # also drops the copy left by a previous panel version
+        if enable:
+            lst.append(_repair_on_load)
+
+
+class AXIS_OT_panel_repair_rig(bpy.types.Operator):
+    bl_idname = "axis_panel.repair_rig"
+    bl_label = "Repair Rig"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def description(cls, context, properties):
+        rig = _panel_get_main_rig(context)
+        lines = [_repair_describe(i) for i in _repair_scan(rig)]
+        return "Fix corrective shapekeys of this character:\n" + "\n".join("- " + l for l in lines)
+
+    @classmethod
+    def poll(cls, context):
+        return bool(_repair_scan(_panel_get_main_rig(context)))
+
+    def invoke(self, context, event):
+        msg = ("Fixes the thumb correctives and renames upperArmTwistIn/OutRight. "
+               "If you exported this character or use these shapekey names elsewhere, re-export after repairing.")
+        try:
+            return context.window_manager.invoke_confirm(
+                self, event, title="Repair AXIS Rig", message=msg, confirm_text="Repair", icon='WARNING')
+        except TypeError:  # Blender 4.0
+            return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        rig = _panel_get_main_rig(context)
+        issues = list(_repair_scan(rig))
+        fixed = 0
+        for issue in issues:
+            obj = bpy.data.objects.get(issue["mesh"])
+            key = obj.data.shape_keys if obj else None
+            if not key:
+                continue
+            if issue["kind"] == "bone" and key.animation_data:
+                fc = key.animation_data.drivers.find(f'key_blocks["{issue["key"]}"].value')
+                var = fc.driver.variables.get(issue["var"]) if fc else None
+                if var:
+                    for t in var.targets:
+                        if t.bone_target == issue["old"]:
+                            t.bone_target = issue["new"]
+                            fixed += 1
+            elif issue["kind"] == "swap":
+                kb = key.key_blocks
+                a, b = issue["a"], issue["b"]
+                fcs = {}
+                if key.animation_data:
+                    for n in (a, b):
+                        fc = key.animation_data.drivers.find(f'key_blocks["{n}"].value')
+                        if fc:
+                            fcs[n] = fc
+                tmp = a + "__axis_tmp"
+                kb[a].name = tmp
+                kb[b].name = a
+                kb[tmp].name = b
+                # each driver stays with its geometry
+                if a in fcs:
+                    fcs[a].data_path = f'key_blocks["{b}"].value'
+                if b in fcs:
+                    fcs[b].data_path = f'key_blocks["{a}"].value'
+                fixed += 1
+            if obj:
+                obj.data.update_tag()
+
+        _repair_cache.pop(rig.name, None)
+        remaining = _repair_scan(rig)
+        _panel_refresh(context, rig)
+        if remaining:
+            self.report({'WARNING'}, f"Rig repaired partially ({len(remaining)} issue(s) left). Contact support.")
+        else:
+            self.report({'INFO'}, f"AXIS rig repaired ({fixed} fix(es)). Save the file to keep the changes.")
+        return {'FINISHED'}
+
+
+def _panel_draw_repair_block(layout, context, rig):
+    issues = _repair_scan(rig)
+    if not issues:
+        return
+    box = layout.box()
+    box.alert = True
+    col = box.column(align=True)
+    col.label(text="Rig repair available", icon='ERROR')
+    n = len(issues)
+    col.label(text=f"{n} shapekey issue{'s' if n != 1 else ''} found", icon='BLANK1')
+    row = box.row()
+    row.alert = True
+    row.scale_y = 1.4
+    row.operator("axis_panel.repair_rig", text="Repair Rig", icon='MODIFIER')
+
+
 # -----------------------------
 # Panel
 # -----------------------------
@@ -789,6 +1028,8 @@ class AXIS_PT_MainPanel(bpy.types.Panel):
             row.label(text="No AXIS rig assigned.", icon='ERROR')
             _panel_draw_info_block(layout, context)
             return
+
+        _panel_draw_repair_block(layout, context, rig_obj)
 
         widget_obj = _get_widget_for_rig(rig_obj)
         if widget_obj and widget_obj.type == "ARMATURE":
@@ -1277,6 +1518,7 @@ classes = [
     AXIS_OT_panel_copy_pose,
     AXIS_OT_panel_paste_pose,
     AXIS_OT_panel_side_mirror,
+    AXIS_OT_panel_repair_rig,
     AXISPANEL_OT_CheckUpdate,
     AXISPANEL_OT_DownloadUpdate,
 ]
@@ -1329,7 +1571,11 @@ def register():
             default=True
         )
 
+    _repair_cache.clear()
+    _repair_handlers_set(True)
+
 def unregister():
+    _repair_handlers_set(False)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
