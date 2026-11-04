@@ -1,6 +1,6 @@
 # AXIS Panel
 
-Embedded rig control panels for AXIS characters (OMNIA 2, VERSA and VERSA V2).
+Embedded rig control panel for AXIS characters (OMNIA 2 and VERSA).
 Distributed free with every AXIS model.
 
 ## What is this?
@@ -10,39 +10,16 @@ It provides rig controls — IK/FK switching, bone layer visibility, pose tools,
 
 It is **not** a standalone addon. It comes pre-installed in every AXIS character file and updates itself directly from this repository.
 
-## Two panels
-
-- **AXIS Panel** (`AXIS_Panel.py`) — the panel of OMNIA 2 and VERSA characters, in the **AXIS Panel** tab.
-- **AXIS Rig Panel** (`AXIS_Rig_Panel.py`) — the panel of VERSA V2 characters, in the **AXIS Rig** tab. Supported from Blender 4.5 LTS; works from Blender 4.0.
-
-Each panel updates only from its own files, so a character always receives updates for the panel it was delivered with.
-
 ## How to update
 
-Open your AXIS character file in Blender, go to the panel's tab in the N-panel (**AXIS Panel** or **AXIS Rig**), expand the **Info** section, and click **Check for Updates**. If a new version is available, click **Update Panel** — it downloads and installs automatically.
+Open your AXIS character file in Blender, go to the **AXIS Panel** tab in the N-panel, expand the **Info** section, and click **Check for Updates**. If a new version is available, click **Update Panel** — it downloads and installs automatically.
 
 ## Compatible characters
 
 All AXIS-compatible characters are available at:
 [superhivemarket.com/creators/thecatempire](https://superhivemarket.com/creators/thecatempire)
 
-## Changelog — AXIS Rig Panel
-
-### 2.0.2 — 2026-09-18
-- Fixed: leg IK/FK snaps now carry the toe, heel and foot spin controls, exactly as Rigify's own buttons.
-- Fixed: Mirror and Flip now mirror every left/right pair correctly, including face controls whose axes are not symmetric.
-- The rig stays in its mode after a snap.
-- All Limbs: corrected tooltip.
-
-### 2.0.1 — 2026-09-18
-- Works from Blender 4.0: bone selection, IK control visibility and the Face Widget layers on Blender 4.x.
-- Fixed: Fingers FK → IK.
-- Licensed under the GNU GPL v3 or later.
-
-### 2.0.0 — 2026-09-17
-- First version, for VERSA V2 characters.
-
-## Changelog — AXIS Panel
+## Changelog
 
 ### 0.6.6 — 2026-11-04
 - New: **Rig Repair**. The panel checks the character for known issues in its corrective shapekeys. If any is found, a red **Repair Rig** button appears under the rig selector; otherwise nothing changes.
@@ -69,4 +46,4 @@ All AXIS-compatible characters are available at:
 
 ---
 
-© 2026 Antonio Solano. The panels' code is free software under the GNU General Public License v3 or later (see LICENSE). AXIS characters are sold under their own license terms.
+© 2026 Antonio Solano. The panel's code is free software under the GNU General Public License v3 or later (see LICENSE). AXIS characters are sold under their own license terms.
