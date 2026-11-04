@@ -17,8 +17,27 @@ __license__ = "GPL-3.0-or-later"
 PANEL_VERSION = (0, 6, 6)
 PANEL_VERSION_STR = ".".join(map(str, PANEL_VERSION))
 
+# Changelog shown by the "What's New" button. Newest first.
+# Single source of truth: tools/make_release.py copies it into version.json.
+PANEL_CHANGELOG = {
+    "0.6.6": [
+        "New: Rig Repair. If the character has a known issue in its corrective shapekeys, a red Repair Rig button appears. Otherwise nothing changes.",
+        "Fixed by Rig Repair: the left thumb correctives reacted to the right thumb.",
+        "Fixed by Rig Repair: upperArmTwistInRight and upperArmTwistOutRight had their names swapped. Re-export the character if you use these names in other software.",
+        "New: What's New button in Info, with the changes of the installed version.",
+        "When an update is available, What's New lists its changes before you install it.",
+    ],
+    "0.6.5": [
+        "Fixed: pressing Update Panel could crash Blender.",
+    ],
+    "0.6.4": [
+        "Security: the updater verifies GitHub's certificate before installing a new panel.",
+    ],
+}
+CHANGELOG_URL = "https://github.com/thecatempire/AXIS_Panel#changelog--axis-panel"
 
-import bpy, threading, json, ssl, re
+
+import bpy, threading, json, ssl, re, textwrap
 import mathutils, mathutils.kdtree
 import numpy as np
 from urllib import request as _urllib_request
@@ -46,6 +65,7 @@ _PANEL_RAW_URL = "https://raw.githubusercontent.com/thecatempire/AXIS_Panel/main
 _update_state = {
     "status": "idle",   # idle | checking | available | up_to_date | error
     "remote_version": None,
+    "remote_notes": {},  # version str -> list of lines, newer than the installed one
 }
 
 # -----------------------------
@@ -1386,6 +1406,7 @@ def _panel_draw_info_block(layout, context):
         inner = box.box()
         col = inner.column(align=True)
         col.label(text=f"AXIS Panel — Version {PANEL_VERSION_STR}", icon="FILE_BLEND")
+        col.operator("axis_panel.show_changelog", text="What's New", icon="TEXT").mode = 'INSTALLED'
         col.separator(factor=0.6)
 
         # ── Update check ──
@@ -1401,7 +1422,10 @@ def _panel_draw_info_block(layout, context):
         elif st["status"] == "available":
             v = ".".join(map(str, st["remote_version"]))
             col.label(text=f"Update available: {v}", icon="ERROR")
-            col.operator("axis_panel.download_update", text="Update Panel", icon="IMPORT")
+            r = col.row(align=True)
+            if st.get("remote_notes"):
+                r.operator("axis_panel.show_changelog", text="What's New", icon="TEXT").mode = 'AVAILABLE'
+            r.operator("axis_panel.download_update", text="Update Panel", icon="IMPORT")
         elif st["status"] == "error":
             col.label(text="Could not check for updates.", icon="ERROR")
             col.operator("axis_panel.check_update", text="Retry", icon="FILE_REFRESH")
@@ -1433,6 +1457,60 @@ def _panel_draw_info_block(layout, context):
 
 
 # -----------------------------
+# Changelog
+# -----------------------------
+
+def _version_tuple(text):
+    try:
+        return tuple(int(x) for x in str(text).split("."))
+    except ValueError:
+        return (0,)
+
+
+class AXISPANEL_OT_ShowChangelog(bpy.types.Operator):
+    bl_idname = "axis_panel.show_changelog"
+    bl_label = "What's New"
+    bl_description = "Show the changes of the AXIS Panel"
+    bl_options = {'INTERNAL'}
+
+    mode: bpy.props.EnumProperty(items=(
+        ('INSTALLED', "Installed", "Changes of the installed version"),
+        ('AVAILABLE', "Available", "Changes of the update available"),
+    ))
+
+    WRAP = 62
+
+    def _entries(self):
+        if self.mode == 'AVAILABLE':
+            notes = _update_state.get("remote_notes") or {}
+        else:
+            notes = {PANEL_VERSION_STR: PANEL_CHANGELOG.get(PANEL_VERSION_STR, [])}
+        return sorted(notes.items(), key=lambda kv: _version_tuple(kv[0]), reverse=True)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_popup(self, width=440)
+
+    def draw(self, context):
+        col = self.layout.column(align=True)
+        title = "Changes in the update" if self.mode == 'AVAILABLE' else "What's new in this version"
+        col.label(text=title, icon="TEXT")
+        col.separator(factor=0.8)
+        entries = self._entries()
+        if not entries or not any(lines for _, lines in entries):
+            col.label(text="No notes for this version.")
+        for version, lines in entries:
+            col.label(text=f"Version {version}")
+            for line in lines:
+                for i, chunk in enumerate(textwrap.wrap(str(line), self.WRAP)):
+                    col.label(text=("•  " if i == 0 else "    ") + chunk)
+            col.separator(factor=0.8)
+        col.operator("wm.url_open", text="Full Changelog", icon="URL").url = CHANGELOG_URL
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+
+# -----------------------------
 # Update operators
 # -----------------------------
 
@@ -1445,12 +1523,18 @@ class AXISPANEL_OT_CheckUpdate(bpy.types.Operator):
     def execute(self, context):
         _update_state["status"] = "checking"
         _update_state["remote_version"] = None
+        _update_state["remote_notes"] = {}
 
         def _check():
             try:
                 with _urllib_request.urlopen(_VERSION_URL, timeout=8, context=_ssl_ctx) as resp:
                     data = json.loads(resp.read().decode())
                 remote = tuple(data["version"])
+                notes = data.get("changelog", {})
+                _update_state["remote_notes"] = {
+                    v: lines for v, lines in notes.items()
+                    if isinstance(lines, list) and _version_tuple(v) > PANEL_VERSION
+                } if isinstance(notes, dict) else {}
                 _update_state["remote_version"] = remote
                 _update_state["status"] = "available" if remote > PANEL_VERSION else "up_to_date"
             except Exception:
@@ -1519,6 +1603,7 @@ classes = [
     AXIS_OT_panel_paste_pose,
     AXIS_OT_panel_side_mirror,
     AXIS_OT_panel_repair_rig,
+    AXISPANEL_OT_ShowChangelog,
     AXISPANEL_OT_CheckUpdate,
     AXISPANEL_OT_DownloadUpdate,
 ]

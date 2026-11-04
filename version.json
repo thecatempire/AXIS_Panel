@@ -1,3 +1,22 @@
 {
-  "version": [0, 6, 6]
+  "version": [
+    0,
+    6,
+    6
+  ],
+  "changelog": {
+    "0.6.6": [
+      "New: Rig Repair. If the character has a known issue in its corrective shapekeys, a red Repair Rig button appears. Otherwise nothing changes.",
+      "Fixed by Rig Repair: the left thumb correctives reacted to the right thumb.",
+      "Fixed by Rig Repair: upperArmTwistInRight and upperArmTwistOutRight had their names swapped. Re-export the character if you use these names in other software.",
+      "New: What's New button in Info, with the changes of the installed version.",
+      "When an update is available, What's New lists its changes before you install it."
+    ],
+    "0.6.5": [
+      "Fixed: pressing Update Panel could crash Blender."
+    ],
+    "0.6.4": [
+      "Security: the updater verifies GitHub's certificate before installing a new panel."
+    ]
+  }
 }
