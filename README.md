@@ -44,6 +44,12 @@ All AXIS-compatible characters are available at:
 
 ## Changelog — AXIS Panel
 
+### 0.6.6 — 2026-11-04
+- New: **Rig Repair**. The panel checks the character for known issues in its corrective shapekeys. If any is found, a red **Repair Rig** button appears under the rig selector; otherwise nothing changes.
+- Fixed by Rig Repair: the left thumb correctives (`thumbTwistLeft`, `thumbTipLeft`) reacted to the right thumb.
+- Fixed by Rig Repair: `upperArmTwistInRight` and `upperArmTwistOutRight` had their names swapped with respect to the left side. The deformation was already correct; only the names change. If you exported the character or use these shapekey names in other software, re-export after repairing.
+- The repair can be undone with Ctrl+Z. Save the file to keep it.
+
 ### 0.6.5 — 2026-09-10
 - Fixed: pressing Update Panel could crash Blender. The new panel now registers once the update has finished.
 
